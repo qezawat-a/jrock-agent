@@ -1,0 +1,53 @@
+{
+  "initial_equity": 10000.0,
+  "final_equity": 10111.206018717174,
+  "total_return_pct": 1.1120601871717373,
+  "cagr_pct": null,
+  "max_drawdown_pct": -2.312603425569215,
+  "sharpe_15m_annualized_365d": null,
+  "sortino_15m_annualized_365d": null,
+  "trade_count": 12,
+  "win_rate_pct": 25.0,
+  "profit_factor": 1.3766030897028587,
+  "funding_pnl_usdt": 2.089320027325355,
+  "trading_fees_modeled_usdt": 0.0,
+  "slippage_modeled_bps": 0.0,
+  "leverage": 1.0,
+  "liquidation_simulated": false,
+  "annualized_metrics_note": "Omitted: less than 90 days of common multi-timeframe history; annualization would be misleading.",
+  "symbol": "BTCUSDT",
+  "requested_lookback_days": 30,
+  "actual_common_start_utc": "2026-10-21T17:15:00+00:00",
+  "actual_common_end_utc": "2026-10-23T19:00:00+00:00",
+  "actual_common_days": 2.0729166666666665,
+  "candles_by_timeframe": {
+    "1m": 2986,
+    "3m": 996,
+    "5m": 598,
+    "15m": 200
+  },
+  "execution_timeframe": "15m",
+  "signal_timeframes": [
+    "1m",
+    "3m",
+    "5m",
+    "15m"
+  ],
+  "signal_rules": {
+    "indicators": [
+      "EMA",
+      "MA",
+      "RSI",
+      "MACD",
+      "VOLUME",
+      "MOMENTUM",
+      "ATR_BREAKOUT",
+      "SUPERTREND",
+      "BOLLINGER"
+    ],
+    "parameters": "EMA 9/21; SMA 20/50; RSI 14 (30/70); MACD 12/26/9; volume vs SMA20 with candle direction; ROC10; prior 20-bar ATR breakout; Supertrend ATR10 x3; Bollinger20 x2",
+    "per_timeframe": "at least 3 same-direction indicator votes and >=60% agreement among non-neutral votes",
+    "global": "at least 80% of four timeframe votes; because 3/4=75%, all four timeframes must align",
+    "execution": "signal after candle close, entry at next 15m open; exit on opposite qualified signal; final close at last close"
+  }
+}
