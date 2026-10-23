@@ -1,9 +1,14 @@
 package agent
 
 import (
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 
+	"github.com/yourname/jrock-agent/internal/provider"
 	"github.com/yourname/jrock-agent/internal/trader"
 )
 
@@ -49,6 +54,66 @@ func TestApp_HandleSettings(t *testing.T) {
 	}
 	if got := strings.Join(app.Engine.Config.Timeframes, ","); got != "1m,5m" {
 		t.Fatalf("timeframes = %q", got)
+	}
+}
+
+func TestApp_AutoSetModelByKeyCommand(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/v1/models" {
+			t.Errorf("request = %s %s", r.Method, r.URL.Path)
+		}
+		if r.Header.Get("Authorization") != "Bearer test-key" {
+			t.Errorf("missing configured key authorization")
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprint(w, `{"data":[{"id":"auto-model"}]}`)
+	}))
+	defer server.Close()
+
+	app := &App{Engine: trader.New(), AI: provider.New(server.URL+"/v1", "test-key")}
+	if err := app.Handle("/auto_set_model_by_key"); err != nil {
+		t.Fatal(err)
+	}
+	if app.Model != "auto-model" || app.Cfg.Model != "auto-model" {
+		t.Fatalf("model was not saved in app state: Model=%q Cfg.Model=%q", app.Model, app.Cfg.Model)
+	}
+}
+
+func TestApp_RunAutoSelectsModelWhenKeyExistsAndModelIsUnset(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/models" {
+			t.Errorf("request path=%q, want /models", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprint(w, `{"data":[{"id":"startup-model"}]}`)
+	}))
+	defer server.Close()
+
+	readEnd, writeEnd, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := writeEnd.Close(); err != nil {
+		t.Fatal(err)
+	}
+	originalStdin := os.Stdin
+	os.Stdin = readEnd
+	defer func() {
+		os.Stdin = originalStdin
+		_ = readEnd.Close()
+	}()
+
+	app := &App{Engine: trader.New(), AI: provider.New(server.URL, "key")}
+	app.Run()
+	if app.Model != "startup-model" {
+		t.Fatalf("startup auto-selected model=%q, want startup-model", app.Model)
+	}
+}
+
+func TestApp_AutoSetModelByKeyRequiresConfiguredKey(t *testing.T) {
+	app := &App{Engine: trader.New(), AI: provider.New("https://example.invalid/v1", "")}
+	if err := app.Handle("/auto_set_model_by_key"); err == nil {
+		t.Fatal("expected missing-key error")
 	}
 }
 

@@ -11,6 +11,7 @@ type Config struct {
 	AutoAcceptEdits                              bool
 	TradingMode                                  string
 	BitunixBaseURL, BitunixAPIKey, BitunixSecret string
+	BitunixWSPublic, BitunixWSPrivate            string
 }
 
 // Load reads environment variables and a deliberately small .env subset. Existing
@@ -25,6 +26,8 @@ func Load() Config {
 		TradingMode:     get("TRADING_MODE", "paper"),
 		BitunixBaseURL:  get("BITUNIX_BASE_URL", "https://fapi.bitunix.com"),
 		BitunixAPIKey:   os.Getenv("BITUNIX_API_KEY"), BitunixSecret: os.Getenv("BITUNIX_SECRET_KEY"),
+		BitunixWSPublic:  get("BITUNIX_WS_PUBLIC", "wss://fapi.bitunix.com/public/"),
+		BitunixWSPrivate: get("BITUNIX_WS_PRIVATE", "wss://fapi.bitunix.com/private/"),
 	}
 	if c.TradingMode != "paper" {
 		c.TradingMode = "paper"

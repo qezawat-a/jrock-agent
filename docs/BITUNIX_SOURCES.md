@@ -1,6 +1,6 @@
-# Bitunix futures documentation supplied for later adapter work
+# Bitunix futures documentation and implementation notes
 
-Official API documentation links supplied by the user. This starter does not implement authenticated trading endpoints; validate current schemas and signing rules before building an adapter.
+Official API documentation links supplied by the user and consulted for the REST/WebSocket client. Validate current schemas and signing rules before production use. The project has selected guarded REST methods and a low-level WebSocket transport, but the strategy loop is not wired to either client and private WebSockets have not been tested with user credentials.
 
 - Demo examples: https://github.com/qezawat-a/open-api/Demo
 - Liquidation mechanism and tiered risk limits: https://support.bitunix.com/hc/en-us/articles/32152530856601-Bitunix-Futures-Liquidation-Mechanism-and-Tiered-Risk-Limit
@@ -57,6 +57,12 @@ Official API documentation links supplied by the user. This starter does not imp
 ## Verified snippets during scaffold setup
 
 Official pages returned these parameters: tickers use `GET /api/v1/futures/market/tickers`; K-lines use `GET /api/v1/futures/market/kline`; market orders use `POST /api/v1/futures/trade/place_order`; leverage uses `POST /api/v1/futures/account/change_leverage`; position TP/SL uses `POST /api/v1/futures/tpsl/position/place_order`; and symbol rules are available from `GET /api/v1/futures/market/trading_pairs`.
+
+### WebSocket behavior implemented in the Go transport
+
+The documented futures endpoints are `wss://fapi.bitunix.com/public/` and `wss://fapi.bitunix.com/private/`; these are now the `.env.example` defaults (`BITUNIX_WS_PUBLIC`, `BITUNIX_WS_PRIVATE`). Public subscriptions use `{"op":"subscribe","args":[{"symbol":"BTCUSDT","ch":"price"}]}`. Private login uses a cryptographic nonce, Unix-seconds timestamp, and two-pass SHA-256 `sign = SHA256(hex(SHA256(nonce + timestamp + apiKey)) + secretKey)`. Read and validate the login acknowledgement before calling `SubscribePrivateCore()`; that helper subscribes to balance, position, and order. The documentation says TP/SL (`tpsl`) is pushed automatically after private login succeeds.
+
+The transport spaces client messages at least 200ms apart (five/second maximum) and validates the documented 300-subscription connection limit. It exposes message reads and JSON heartbeat writes. Mock WebSocket tests validate URL/config handling, login signature construction, subscriptions, heartbeat, and received pushes. It has no reconnect/reconciliation loop and is not integrated with `cmd/jrock` or the trading engine. No authenticated private Bitunix WebSocket session has been run.
 
 ### Order-unit calculation (required when sizing from a UI notional/cost amount)
 

@@ -78,6 +78,24 @@ func (c *Client) Models(ctx context.Context) ([]Model, error) {
 	err := c.do(ctx, http.MethodGet, "/models", nil, &r)
 	return r.Data, err
 }
+
+// AutoSetModelByKey uses this client's configured API key to query the
+// provider's /models endpoint and selects the first non-empty model ID returned.
+// It does not send a paid chat-completion probe; call CheckChat separately to
+// verify that the selected model supports chat completions.
+func (c *Client) AutoSetModelByKey(ctx context.Context) (string, error) {
+	models, err := c.Models(ctx)
+	if err != nil {
+		return "", err
+	}
+	for _, model := range models {
+		if id := strings.TrimSpace(model.ID); id != "" {
+			return id, nil
+		}
+	}
+	return "", errors.New("provider returned no usable model IDs")
+}
+
 func (c *Client) CheckChat(ctx context.Context, model string) error {
 	var r chatReply
 	return c.do(ctx, http.MethodPost, "/chat/completions", chatRequest{Model: model, Messages: []message{{Role: "user", Content: "Reply with exactly: OK"}}, Temperature: 0}, &r)

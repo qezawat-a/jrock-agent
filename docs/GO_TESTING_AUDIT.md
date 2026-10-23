@@ -8,7 +8,8 @@ Applied the `golang-testing` guidance. Tests are named, isolated, and use standa
 - `internal/provider/provider_test.go`: model-list request/auth/decode, chat payload/response, chat probe, empty choices, invalid base URL, malformed responses, and redaction of HTTP error bodies.
 - `internal/config/config_test.go`: `.env` parsing, comments/quotes, and process-environment precedence.
 - `internal/agent/repl_test.go`: paper-engine/report flags, refusal to activate auto-trading, valid settings, and invalid/unknown commands.
-- `internal/bitunix/client_test.go`, `units_test.go`, `endpoints_test.go`: official signature test vector, query canonicalization, public/private client restrictions, live-write opt-in, local mocked signed account/order requests, selected REST route mapping, order-unit conversion (Quantity/Nominal Value/Cost Value), precision/min/max/leverage/symbol validation, and safe API errors.
+- `internal/bitunix/client_test.go`, `units_test.go`, `endpoints_test.go`, `websocket_test.go`, `order_unit_request_test.go`: official signature test vector, query canonicalization, public/private client restrictions, live-write opt-in, local mocked signed REST account/order requests, selected route mapping, order-unit conversion, precision/min/max/leverage/symbol validation, safe API errors, and mock public/private WebSocket login/subscription/heartbeat/push tests.
+- `internal/config/websocket_test.go`: public/private Bitunix WebSocket defaults and environment overrides.
 - `internal/bitunix/integration_test.go` is build-tagged `integration`. It was run against Bitunix's **public** `trading_pairs` endpoint and passed; it does not use keys or mutate an account.
 - `.github/workflows/go-test.yml`: CI runs `go test -race ./...` and `go vet ./...`.
 

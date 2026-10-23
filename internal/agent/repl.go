@@ -28,6 +28,11 @@ func New(c config.Config) *App {
 }
 func (a *App) Run() {
 	fmt.Println("J+rock Agent — constrained local assistant | trader mode: PAPER only\nType /help. Only /check_system runs the fixed Go test/vet commands; arbitrary shell access is disabled.")
+	if a.Model == "" && a.AI != nil && a.AI.APIKey != "" {
+		if err := a.autoSetModelByKey(); err != nil {
+			fmt.Println("Automatic model selection failed; use /models or /auto_set_model_by_key:", err)
+		}
+	}
 	s := bufio.NewScanner(os.Stdin)
 	for {
 		fmt.Print("jrock> ")
@@ -58,6 +63,8 @@ func (a *App) Handle(line string) error {
 		fmt.Println(helpText)
 	case "/models":
 		return a.models()
+	case "/auto_set_model_by_key", "/auto_set_model":
+		return a.autoSetModelByKey()
 	case "/set_model":
 		if arg == "" {
 			return fmt.Errorf("usage: /set_model MODEL_ID")
@@ -218,6 +225,23 @@ func (a *App) settings(arg string) error {
 	}
 	return a.setArg(strings.ToLower(k), v)
 }
+func (a *App) autoSetModelByKey() error {
+	if a.AI == nil || a.AI.APIKey == "" {
+		return fmt.Errorf("configure AI_API_KEY locally before automatic model selection")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	model, err := a.AI.AutoSetModelByKey(ctx)
+	if err != nil {
+		return err
+	}
+	a.Model = model
+	a.Cfg.Model = model
+	fmt.Println("Auto-selected model:", model)
+	fmt.Println("This came from the provider model list; run /check_ai to verify chat support.")
+	return nil
+}
+
 func (a *App) models() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
@@ -289,7 +313,7 @@ func (a *App) memory(arg string) error {
 }
 
 const helpText = `General:
-  /help /models /set_model MODEL /connect_provider /check_ai /think PROMPT
+  /help /models /auto_set_model_by_key /set_model MODEL /connect_provider /check_ai /think PROMPT
   /add_soul TEXT /soul [show|text] /memory [note] /add_skill /skill
   /add_mcp /mcp /team_spawn TASK /code_review (alias /code_reveiew)
   /bug_fix /verify /simplify (alias /simpilfy) /check_system
