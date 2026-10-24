@@ -11,6 +11,8 @@ A constrained, local Go CLI scaffold for a candid AI coding assistant and paper-
 cp .env.example .env
 # edit .env locally; never commit keys
 go run ./cmd/jrock
+# For Railway/live public signals only (no orders):
+go run ./cmd/bitunix-paper
 ```
 
 Commands begin with `/`; use `/help`. `AI_BASE_URL`, `AI_API_KEY`, and `AI_MODEL` may be set in process environment or `.env`. If `AI_API_KEY` is configured and `AI_MODEL` is blank, startup automatically calls `GET {base}/models` and selects the first non-empty model ID; retry any time with `/auto_set_model_by_key` (alias `/auto_set_model`). This uses the key to query the configured provider, not to infer a model offline. It does not send a chat probe or incur chat-completion usage. Run `/check_ai` to verify the selected model supports chat completions. `/models` lists available IDs; manual selection remains available with `/set_model ID`. Provider error response bodies are not printed to avoid leaking secrets or private server details.
@@ -18,17 +20,18 @@ Commands begin with `/`; use `/help`. `AI_BASE_URL`, `AI_API_KEY`, and `AI_MODEL
 ## Current implementation
 
 - Model discovery, model selection, connectivity probe, and simple chat completions for OpenAI-compatible APIs.
-- Local SOUL.md and append-only text memory.
+- Long-term memory: `/memory NOTE` appends persistent notes to `MEMORY_PATH` (default `data/memory.md`), and `/think` includes the most recent 12,000 characters as reference context. For Railway persistence, attach a Volume mounted at `/app/data` and set `MEMORY_PATH=/app/data/memory.md`; without a Volume, Railway's service filesystem is ephemeral and notes may be lost on redeploy.
 - Paper-trader settings and command flags with basic validation; default indicators are EMA, MA, RSI, MACD, VOLUME, MOMENTUM, ATR_BREAKOUT, SUPERTREND, BOLLINGER. Requested timeframes and basic thresholds are represented as config.
 - `/check_system` and `/verify` run `go test ./...` and `go vet ./...`.
 - A separate Bitunix REST package in `internal/bitunix`: SHA-256 request signing; public trading-pair metadata; signed account, position, history, leverage/mode, order, and TP/SL methods. Writes are blocked by default. `NewLiveClient` requires both `BITUNIX_LIVE_TRADING=I_ACKNOWLEDGE_REAL_TRADING` and an explicit call-site acknowledgement; this is an API-library gate, not an autonomous/live strategy loop.
 - Bitunix order-unit conversion using the supplied Help Center article: Nominal Value → `qty = notional/price`; Cost Value → `qty = cost × leverage/price`; Quantity is base-asset `qty`. Quantity is rounded down to `basePrecision` and checked against the returned minimum/maximum volumes, symbol status, API support, and leverage limits. Trading fees are not included in Cost Value.
-- Low-level Bitunix WebSocket transport in `internal/bitunix/websocket.go`: public connect, private signed login (Unix seconds), subscribe/unsubscribe, JSON heartbeat, private balance/position/order subscriptions, and incoming message reads. URLs are configurable as `BITUNIX_WS_PUBLIC` and `BITUNIX_WS_PRIVATE`; private TP/SL (`tpsl`) is automatically pushed after successful login per docs. Client writes are spaced to respect Bitunix's 5-message/second limit. It is tested against local WebSocket mocks, not connected to the paper trader; reconnection and event reconciliation are not implemented.
-- `go run ./cmd/bitunix-check` performs a signed **read-only** account check after `BITUNIX_API_KEY` and `BITUNIX_SECRET_KEY` are configured locally in `.env`. No order is sent.
+- Low-level Bitunix WebSocket transport in `internal/bitunix/websocket.go`: public connect, private signed login (Unix seconds), subscribe/unsubscribe, JSON heartbeat, private balance/position/order subscriptions, and incoming message reads. URLs are configurable as `BITUNIX_WS_PUBLIC` and `BITUNIX_WS_PRIVATE`; private TP/SL (`tpsl`) is automatically pushed after successful login per docs. Client writes are spaced to respect Bitunix's 5-message/second limit. Local mock tests cover the protocol; reconnect/reconciliation is not implemented.
+- `go run ./cmd/bitunix-paper` is a continuous Bitunix **public market-data** signal runner: it fetches closed candles, calculates nine indicator votes and multi-timeframe consensus, and logs `PAPER_SIGNAL ... orders=DISABLED`. `go run ./cmd/bitunix-paper --once` performs one scan and exits. It never authenticates to the private API or sends orders. In Railway, this is the safe worker command to see live market signals after deploying the updated source.
+- `go run ./cmd/bitunix-check` performs a signed **read-only** account check after API credentials are configured locally. It never changes account settings or sends orders.
 - API documentation index in [`docs/BITUNIX_SOURCES.md`](docs/BITUNIX_SOURCES.md).
 - Separate Bitunix futures historical-candle research prototype in [`backtesting/bitunix_backtest.py`](backtesting/bitunix_backtest.py), plus reports in [`backtesting/RESULTS.md`](backtesting/RESULTS.md). It is Python, public-data-only, and not connected to the Go agent or live trading. Requires `pandas`, `numpy`, and `requests`: `python -m pip install pandas numpy requests`. Run, for example: `python backtesting/bitunix_backtest.py --symbol BTCUSDT --days 30 --timeframes 15m`. The four-timeframe default is `--timeframes 1m,3m,5m,15m`; the API returned only 2.07 days of overlapping history in the current run.
 
-Not implemented/wired into the agent loop: autonomous code changes, auto-accept, broad device/terminal access, executable MCP/plugins/skills, real subagents, strategy/indicator execution, market scanner, portfolio risk manager, live position management, trailing/breakeven automation, TP/SL verification/reconciliation, WebSocket reconnect/state reconciliation, and live PnL/reporting. The Bitunix REST and WebSocket clients are not called by trader commands. No authenticated private request or live order has been tested against a real account.
+Not implemented/wired into live trading: portfolio risk limits, order sizing policy for a real account, private-position reconciliation loop, live trailing/breakeven order updates, TP/SL confirmation, WebSocket reconnect/state reconciliation, and live PnL/reporting. The safe paper signal runner does not place orders and is not connected to the REPL trader flags. The Bitunix REST/WebSocket writers are not called by that runner. No authenticated private WebSocket or live order has been tested against a real account.
 
 ## Editing and approvals
 
@@ -42,19 +45,9 @@ go test -race ./...
 go vet ./...
 ```
 
-Test audit and coverage notes are in [`docs/GO_TESTING_AUDIT.md`](docs/GO_TESTING_AUDIT.md). Bitunix private requests are tested with local mocks; the only real exchange integration test is a public symbol-metadata read. No private account request or order has been sent.
+Test audit and coverage notes are in [`docs/GO_TESTING_AUDIT.md`](docs/GO_TESTING_AUDIT.md). Bitunix private REST/WS behavior is tested with local mocks; opt-in real-exchange tests read public symbol metadata and public candles only. No private WebSocket session or live order has been tested.
 
 ## GitHub
 
-The project is local here. No GitHub repo URL or PAT was included yet, and I have not pushed anything. After you create a private repository and provide its URL, use a fine-grained PAT limited to that one repository with Contents: Read and write (and Metadata: read). Prefer entering the token into your own credential manager/CLI rather than pasting it into chat. Then:
+The user supplied `https://github.com/qezawat-a/jrock-agent`. The current workspace changes have not been pushed to that repository. Never paste a PAT into chat; use a local GitHub credential manager/CLI to publish reviewed changes.
 
-```sh
-git init
-git add .
-git commit -m 'Initial J+rock Go scaffold'
-git branch -M main
-git remote add origin YOUR_REPO_URL
-git push -u origin main
-```
-
-Rotate/revoke the PAT after use if it was exposed in chat. Never store it in `.env`, source, or a commit.

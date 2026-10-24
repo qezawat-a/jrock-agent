@@ -8,6 +8,7 @@ import (
 
 type Config struct {
 	BaseURL, APIKey, Model, Provider             string
+	MemoryPath                                   string
 	AutoAcceptEdits                              bool
 	TradingMode                                  string
 	BitunixBaseURL, BitunixAPIKey, BitunixSecret string
@@ -22,6 +23,7 @@ func Load() Config {
 		BaseURL: get("AI_BASE_URL", "https://api.openai.com/v1"),
 		APIKey:  os.Getenv("AI_API_KEY"), Model: os.Getenv("AI_MODEL"),
 		Provider:        get("AI_PROVIDER", "openai-compatible"),
+		MemoryPath:      get("MEMORY_PATH", "data/memory.md"),
 		AutoAcceptEdits: strings.EqualFold(os.Getenv("AUTO_ACCEPT_EDITS"), "true"),
 		TradingMode:     get("TRADING_MODE", "paper"),
 		BitunixBaseURL:  get("BITUNIX_BASE_URL", "https://fapi.bitunix.com"),

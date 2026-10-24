@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -56,6 +57,80 @@ func (c *Client) GetTradingPairs(ctx context.Context, symbols []string) ([]Tradi
 	}
 	var out []TradingPair
 	err := c.PublicGet(ctx, "/api/v1/futures/market/trading_pairs", q, &out)
+	return out, err
+}
+
+type Kline struct {
+	Open     string `json:"open"`
+	High     string `json:"high"`
+	Low      string `json:"low"`
+	Close    string `json:"close"`
+	QuoteVol string `json:"quoteVol"`
+	BaseVol  string `json:"baseVol"`
+	Time     int64  `json:"time"`
+	Type     string `json:"type"`
+}
+
+// UnmarshalJSON accepts both numeric and quoted Unix-millisecond candle times;
+// the docs specify an integer, but public responses may serialize it as a string.
+func (k *Kline) UnmarshalJSON(data []byte) error {
+	var wire struct {
+		Open     string          `json:"open"`
+		High     string          `json:"high"`
+		Low      string          `json:"low"`
+		Close    string          `json:"close"`
+		QuoteVol string          `json:"quoteVol"`
+		BaseVol  string          `json:"baseVol"`
+		Time     json.RawMessage `json:"time"`
+		Type     string          `json:"type"`
+	}
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+	timeRaw := strings.TrimSpace(string(wire.Time))
+	if strings.HasPrefix(timeRaw, "\"") {
+		var text string
+		if err := json.Unmarshal(wire.Time, &text); err != nil {
+			return err
+		}
+		timeRaw = strings.TrimSpace(text)
+	}
+	timestamp, err := strconv.ParseInt(timeRaw, 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid kline time %q: %w", timeRaw, err)
+	}
+	*k = Kline{Open: wire.Open, High: wire.High, Low: wire.Low, Close: wire.Close, QuoteVol: wire.QuoteVol, BaseVol: wire.BaseVol, Time: timestamp, Type: wire.Type}
+	return nil
+}
+
+// GetKlines fetches closed futures candles from Bitunix's public market endpoint.
+// Bitunix documents a maximum limit of 200 candles per request.
+func (c *Client) GetKlines(ctx context.Context, symbol, interval, priceType string, limit int) ([]Kline, error) {
+	if strings.TrimSpace(symbol) == "" {
+		return nil, errors.New("symbol is required")
+	}
+	switch interval {
+	case "1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w", "1M":
+	default:
+		return nil, fmt.Errorf("unsupported kline interval %q", interval)
+	}
+	if priceType == "" {
+		priceType = "LAST_PRICE"
+	}
+	if priceType != "LAST_PRICE" && priceType != "MARK_PRICE" {
+		return nil, errors.New("kline type must be LAST_PRICE or MARK_PRICE")
+	}
+	if limit < 1 || limit > 200 {
+		return nil, errors.New("kline limit must be between 1 and 200")
+	}
+	q := url.Values{
+		"symbol":   []string{symbol},
+		"interval": []string{interval},
+		"limit":    []string{fmt.Sprint(limit)},
+		"type":     []string{priceType},
+	}
+	var out []Kline
+	err := c.PublicGet(ctx, "/api/v1/futures/market/kline", q, &out)
 	return out, err
 }
 
